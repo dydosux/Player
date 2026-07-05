@@ -20,12 +20,12 @@ local selected = 1
 local playing = false
 local status = "Ready"
 local speakers = {}
-local buttons = {}
 local stopRequested = false
 local manualStopRequested = false
 local nextRequested = false
 local prevRequested = false
 local listOffset = 0
+local volume = 1.0
 
 local function ensureDir(path)
   if not fs.exists(path) then fs.makeDir(path) end
@@ -50,20 +50,6 @@ end
 local function center(y, text, fg, bg)
   local w = screen.getSize()
   writeAt(math.max(1, math.floor((w - #text) / 2) + 1), y, text, fg, bg)
-end
-
-local function addButton(id, x, y, w, label, fg, bg)
-  buttons[#buttons + 1] = { id = id, x = x, y = y, w = w, h = 1 }
-  writeAt(x, y, string.rep(" ", w), fg, bg)
-  writeAt(x + math.max(0, math.floor((w - #label) / 2)), y, label, fg, bg)
-end
-
-local function hitButton(x, y)
-  for _, button in ipairs(buttons) do
-    if x >= button.x and x < button.x + button.w and y >= button.y and y < button.y + button.h then
-      return button.id
-    end
-  end
 end
 
 local function refreshSpeakers()
@@ -202,12 +188,13 @@ local function selfUpdate()
 end
 
 local function draw()
-  buttons = {}
   refreshSpeakers()
   clear(colors.black)
   local w, h = screen.getSize()
   writeAt(2, 1, "ServerFOX Music", colors.cyan)
   writeAt(w - 13, 1, "SPK " .. tostring(#speakers), colors.lime)
+  local volumeText = "VOL " .. tostring(math.floor(volume * 100 + 0.5)) .. "%"
+  writeAt(math.max(2, w - #volumeText - 1), 2, volumeText, colors.yellow)
   writeAt(2, 2, status, colors.gray)
 
   local listTop = 4
@@ -232,14 +219,10 @@ local function draw()
     end
   end
 
-  local y = h - 2
-  local bw = math.max(7, math.floor((w - 7) / 5))
-  addButton("prev", 2, y, bw, "Prev", colors.white, colors.gray)
-  addButton("play", 3 + bw, y, bw, "Play", colors.black, colors.lime)
-  addButton("stop", 4 + bw * 2, y, bw, "Stop", colors.white, colors.red)
-  addButton("next", 5 + bw * 3, y, bw, "Next", colors.white, colors.gray)
-  addButton("update", 6 + bw * 4, y, bw, "Update", colors.white, colors.blue)
-  writeAt(2, h, "Keys: Up/Down Enter S U N/P R Q", colors.gray)
+  local barW = math.max(8, math.min(w - 20, 28))
+  local filled = math.floor(volume * barW + 0.5)
+  writeAt(2, h - 2, "Volume [" .. string.rep("#", filled) .. string.rep("-", barW - filled) .. "]", colors.yellow)
+  writeAt(2, h, "Keys: Up/Down Enter S U N/P R Q  +/- volume", colors.gray)
 end
 
 local function selectNext()
@@ -279,18 +262,20 @@ local function controlAction(id)
   end
 end
 
+local function changeVolume(delta)
+  volume = math.max(0, math.min(1, volume + delta))
+  status = "Volume " .. tostring(math.floor(volume * 100 + 0.5)) .. "%"
+end
+
 local function handlePlaybackEvent(event, a, b, c)
   if event == "key" then
     local key = keys.getName(a)
     if key == "s" then controlAction("stop")
     elseif key == "n" or key == "right" then controlAction("next")
     elseif key == "p" or key == "left" then controlAction("prev")
+    elseif key == "minus" then changeVolume(-0.1); draw()
+    elseif key == "equals" or key == "numPadAdd" then changeVolume(0.1); draw()
     end
-  elseif event == "monitor_touch" or event == "mouse_click" then
-    local x = b
-    local y = c
-    local id = hitButton(x, y)
-    if id then controlAction(id) end
   end
 end
 
@@ -344,7 +329,10 @@ local function playSelected()
     while remaining > 0 and not stopRequested do
       for index, speaker in ipairs(speakers) do
         if pending[index] then
-          local ok, played = pcall(function() return speaker.playAudio(buffer) end)
+          local ok, played = pcall(function() return speaker.playAudio(buffer, volume) end)
+          if not ok then
+            ok, played = pcall(function() return speaker.playAudio(buffer) end)
+          end
           if not ok or played then
             pending[index] = false
             remaining = remaining - 1
@@ -390,22 +378,18 @@ while true do
     elseif key == "u" then updateLibrary(); loadTracks(); draw()
     elseif key == "n" or key == "right" then selectNext(); draw()
     elseif key == "p" or key == "left" then selectPrev(); draw()
+    elseif key == "minus" then changeVolume(-0.1); draw()
+    elseif key == "equals" or key == "numPadAdd" then changeVolume(0.1); draw()
     elseif key == "r" then selfUpdate()
     elseif key == "q" then stopSpeakers(); clear(); return
     end
   elseif event == "monitor_touch" or event == "mouse_click" then
-    local x = b
     local y = c
-    local id = hitButton(x, y)
-    if id == "play" then playSelected()
-    elseif id then controlAction(id)
-    else
-      local _, h = screen.getSize()
-      local index = y - 3 + listOffset
-      if index >= 1 and index <= #tracks and y < h - 3 then
-        selected = index
-        draw()
-      end
+    local _, h = screen.getSize()
+    local index = y - 3 + listOffset
+    if index >= 1 and index <= #tracks and y < h - 3 then
+      selected = index
+      draw()
     end
   elseif event == "peripheral" or event == "peripheral_detach" then
     refreshSpeakers()
