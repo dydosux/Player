@@ -2,6 +2,7 @@ local owner = "dydosux"
 local repo = "Player"
 local branch = "main"
 local rawBase = "https://raw.githubusercontent.com/" .. owner .. "/" .. repo .. "/" .. branch .. "/"
+local githubRawBase = "https://github.com/" .. owner .. "/" .. repo .. "/raw/" .. branch .. "/"
 local musicDir = "music"
 
 local function ensureDir(path)
@@ -10,11 +11,16 @@ end
 
 local function download(url, path, binary)
   for attempt = 1, 5 do
-    if fs.exists(path) then fs.delete(path) end
-    shell.run("wget", url, path)
-    if fs.exists(path) then return true end
+    for _, candidate in ipairs({ url, url:gsub(rawBase, githubRawBase) }) do
+      if fs.exists(path) then fs.delete(path) end
+      shell.run("wget", candidate, path)
+      if fs.exists(path) then
+        sleep(0.5)
+        return true
+      end
+    end
     print("Retry " .. attempt .. "/5")
-    sleep(1)
+    sleep(2)
   end
   print("Failed: " .. url)
   return false
