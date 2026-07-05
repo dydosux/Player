@@ -1,6 +1,10 @@
 {
   "tracks": [
     {
+      "title": "Artur",
+      "file": "Artur.dfpwm"
+    },
+    {
       "title": "BarSong",
       "file": "BarSong.dfpwm"
     },
