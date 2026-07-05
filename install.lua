@@ -1,15 +1,8 @@
 local files = {}
 
 local playerSource = [[
-local dfpwm = require("cc.audio.dfpwm")
-
 local musicDir = "music"
 local manifestPath = "tracks.json"
-local owner = "dydosux"
-local repo = "Player"
-local branch = "main"
-local rawBase = "https://raw.githubusercontent.com/" .. owner .. "/" .. repo .. "/" .. branch .. "/"
-local githubRawBase = "https://github.com/" .. owner .. "/" .. repo .. "/raw/" .. branch .. "/"
 
 local speaker = peripheral.find("speaker")
 if not speaker then error("Speaker not found") end
@@ -20,7 +13,6 @@ if screen.setTextScale then screen.setTextScale(0.5) end
 local selected = 1
 local playing = false
 local stopRequested = false
-local bufferChunks = 8
 
 local function loadTracks()
   if not fs.exists(manifestPath) then
@@ -77,77 +69,19 @@ end
 local function playTrack(track)
   local path = fs.combine(musicDir, track.file)
 
+  if not fs.exists(path) then
+    playing = false
+    local encoded = textutils.urlEncode(track.file)
+    draw()
+    writeAt(2, select(2, screen.getSize()), "Missing " .. encoded .. ". Run update.", colors.red)
+    sleep(2)
+    return
+  end
+
   playing = true
   stopRequested = false
   draw()
-
-  local decoder = dfpwm.make_decoder()
-  local file = nil
-  local response = nil
-  local queue = {}
-  local finished = false
-
-  if fs.exists(path) then
-    file = fs.open(path, "rb")
-  else
-    local encoded = textutils.urlEncode(track.file)
-    for _, url in ipairs({ rawBase .. encoded, githubRawBase .. encoded }) do
-      response = http.get(url, nil, true)
-      if response then break end
-    end
-    if not response then
-      playing = false
-      draw()
-      writeAt(2, select(2, screen.getSize()), "Cannot stream track. Try again.", colors.red)
-      sleep(2)
-      return
-    end
-  end
-
-  local function producer()
-    while not stopRequested do
-      while #queue >= bufferChunks and not stopRequested do
-        sleep(0.05)
-      end
-
-      local chunk = file and file.read(16 * 1024) or response.read(16 * 1024)
-      if not chunk then break end
-
-      queue[#queue + 1] = decoder(chunk)
-      os.queueEvent("music_buffer")
-    end
-    finished = true
-    os.queueEvent("music_buffer")
-  end
-
-  local function consumer()
-    while not stopRequested do
-      if #queue == 0 then
-        if finished then break end
-        local event, key = os.pullEvent()
-        if event == "key" and keys.getName(key) == "s" then
-          stopRequested = true
-          break
-        end
-      else
-        local buffer = table.remove(queue, 1)
-        while not stopRequested and not speaker.playAudio(buffer) do
-          local event, key = os.pullEvent()
-          if event == "speaker_audio_empty" then
-            break
-          elseif event == "key" and keys.getName(key) == "s" then
-            stopRequested = true
-            break
-          end
-        end
-      end
-    end
-  end
-
-  parallel.waitForAny(producer, consumer)
-
-  if file then file.close() end
-  if response then response.close() end
+  shell.run("speaker", "play", path)
   speaker.stop()
   playing = false
   draw()
