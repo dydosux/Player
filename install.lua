@@ -1,11 +1,25 @@
 local files = {}
 
 local playerSource = [[
+local dfpwm = require("cc.audio.dfpwm")
+
 local musicDir = "music"
 local manifestPath = "tracks.json"
 
-local speaker = peripheral.find("speaker")
-if not speaker then error("Speaker not found") end
+local speakers = {}
+
+local function refreshSpeakers()
+  speakers = { peripheral.find("speaker") }
+  return #speakers
+end
+
+local function stopSpeakers()
+  for _, speaker in ipairs(speakers) do
+    pcall(function() speaker.stop() end)
+  end
+end
+
+if refreshSpeakers() == 0 then error("Speaker not found") end
 
 local screen = peripheral.find("monitor") or term.current()
 if screen.setTextScale then screen.setTextScale(0.5) end
@@ -52,7 +66,7 @@ local function draw()
   clear()
   local w, h = screen.getSize()
   writeAt(2, 1, "Music Player", colors.cyan)
-  writeAt(2, 2, "Enter/click: play  S: stop  U: update  Q: quit", colors.gray)
+  writeAt(2, 2, "Speakers: " .. #speakers .. "  Enter/click: play  S: stop  U: update  Q: quit", colors.gray)
 
   for i = 1, math.min(#tracks, h - 4) do
     local track = tracks[i]
@@ -80,9 +94,46 @@ local function playTrack(track)
 
   playing = true
   stopRequested = false
+  refreshSpeakers()
   draw()
-  shell.run("speaker", "play", path)
-  speaker.stop()
+
+  local decoder = dfpwm.make_decoder()
+  local file = fs.open(path, "rb")
+
+  while not stopRequested do
+    local chunk = file.read(16 * 1024)
+    if not chunk then break end
+
+    local buffer = decoder(chunk)
+    local pending = {}
+    local remaining = 0
+    for index = 1, #speakers do
+      pending[index] = true
+      remaining = remaining + 1
+    end
+
+    while remaining > 0 and not stopRequested do
+      for index, speaker in ipairs(speakers) do
+        if pending[index] then
+          local ok, played = pcall(function() return speaker.playAudio(buffer) end)
+          if not ok or played then
+            pending[index] = false
+            remaining = remaining - 1
+          end
+        end
+      end
+
+      if remaining > 0 then
+        local event, key = os.pullEvent()
+        if event == "key" and keys.getName(key) == "s" then
+          stopRequested = true
+        end
+      end
+    end
+  end
+
+  file.close()
+  stopSpeakers()
   playing = false
   draw()
 end
@@ -112,11 +163,11 @@ while true do
       playTrack(tracks[selected])
     elseif key == "s" then
       stopRequested = true
-      speaker.stop()
+      stopSpeakers()
     elseif key == "u" then
       runUpdate()
     elseif key == "q" then
-      speaker.stop()
+      stopSpeakers()
       clear()
       return
     end
