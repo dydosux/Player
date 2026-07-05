@@ -536,6 +536,14 @@ while true do
     if id == "play" then
       playSelected()
       return
+    elseif id == "next" then
+      selectNext()
+      draw()
+      return
+    elseif id == "prev" then
+      selectPrev()
+      draw()
+      return
     elseif id then
       controlAction(id)
       draw()
