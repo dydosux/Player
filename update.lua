@@ -9,18 +9,11 @@ local function ensureDir(path)
 end
 
 local function download(url, path, binary)
-  local response = http.get(url, nil, binary)
-  if not response then
+  if fs.exists(path) then fs.delete(path) end
+  if not shell.run("wget", url, path) then
     print("Failed: " .. url)
     return false
   end
-
-  local data = response.readAll()
-  response.close()
-
-  local file = fs.open(path, binary and "wb" or "w")
-  file.write(data)
-  file.close()
   return true
 end
 
