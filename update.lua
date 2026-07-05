@@ -9,13 +9,15 @@ local function ensureDir(path)
 end
 
 local function download(url, path, binary)
-  if fs.exists(path) then fs.delete(path) end
-  shell.run("wget", url, path)
-  if not fs.exists(path) then
-    print("Failed: " .. url)
-    return false
+  for attempt = 1, 5 do
+    if fs.exists(path) then fs.delete(path) end
+    shell.run("wget", url, path)
+    if fs.exists(path) then return true end
+    print("Retry " .. attempt .. "/5")
+    sleep(1)
   end
-  return true
+  print("Failed: " .. url)
+  return false
 end
 
 local function loadManifest()

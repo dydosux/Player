@@ -11,11 +11,14 @@ local files = {
 
 local function download(url, path)
   print("Downloading " .. path)
-  if fs.exists(path) then fs.delete(path) end
-  shell.run("wget", url, path)
-  if not fs.exists(path) then
-    error("Cannot download: " .. url)
+  for attempt = 1, 5 do
+    if fs.exists(path) then fs.delete(path) end
+    shell.run("wget", url, path)
+    if fs.exists(path) then return end
+    print("Retry " .. attempt .. "/5")
+    sleep(1)
   end
+  error("Cannot download: " .. url)
 end
 
 for _, item in ipairs(files) do
