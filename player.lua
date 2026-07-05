@@ -2,6 +2,11 @@ local dfpwm = require("cc.audio.dfpwm")
 
 local musicDir = "music"
 local manifestPath = "tracks.json"
+local owner = "dydosux"
+local repo = "Player"
+local branch = "main"
+local rawBase = "https://raw.githubusercontent.com/" .. owner .. "/" .. repo .. "/" .. branch .. "/"
+local githubRawBase = "https://github.com/" .. owner .. "/" .. repo .. "/raw/" .. branch .. "/"
 
 local speaker = peripheral.find("speaker")
 if not speaker then error("Speaker not found") end
@@ -67,21 +72,34 @@ end
 
 local function playTrack(track)
   local path = fs.combine(musicDir, track.file)
-  if not fs.exists(path) then
-    draw()
-    writeAt(2, select(2, screen.getSize()), "Missing file. Run update.", colors.red)
-    sleep(2)
-    return
-  end
 
   playing = true
   stopRequested = false
   draw()
 
   local decoder = dfpwm.make_decoder()
-  local file = fs.open(path, "rb")
+  local file = nil
+  local response = nil
+
+  if fs.exists(path) then
+    file = fs.open(path, "rb")
+  else
+    local encoded = textutils.urlEncode(track.file)
+    for _, url in ipairs({ rawBase .. encoded, githubRawBase .. encoded }) do
+      response = http.get(url, nil, true)
+      if response then break end
+    end
+    if not response then
+      playing = false
+      draw()
+      writeAt(2, select(2, screen.getSize()), "Cannot stream track. Try again.", colors.red)
+      sleep(2)
+      return
+    end
+  end
+
   while not stopRequested do
-    local chunk = file.read(16 * 1024)
+    local chunk = file and file.read(16 * 1024) or response.read(16 * 1024)
     if not chunk then break end
     local buffer = decoder(chunk)
     while not speaker.playAudio(buffer) do
@@ -94,7 +112,8 @@ local function playTrack(track)
       end
     end
   end
-  file.close()
+  if file then file.close() end
+  if response then response.close() end
   speaker.stop()
   playing = false
   draw()

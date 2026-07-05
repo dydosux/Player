@@ -44,16 +44,5 @@ if type(manifest) ~= "table" or type(manifest.tracks) ~= "table" then
   error("tracks.json format is invalid")
 end
 
-local count = 0
-for _, track in ipairs(manifest.tracks) do
-  if type(track.file) == "string" then
-    local localPath = fs.combine(musicDir, track.file)
-    local url = rawBase .. textutils.urlEncode(track.file)
-    if download(url, localPath, true) then
-      count = count + 1
-      print("OK: " .. (track.title or track.file))
-    end
-  end
-end
-
-print("Updated tracks: " .. count)
+print("Track list updated: " .. #manifest.tracks)
+print("Songs will stream from GitHub when played.")

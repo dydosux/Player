@@ -5,6 +5,11 @@ local dfpwm = require("cc.audio.dfpwm")
 
 local musicDir = "music"
 local manifestPath = "tracks.json"
+local owner = "dydosux"
+local repo = "Player"
+local branch = "main"
+local rawBase = "https://raw.githubusercontent.com/" .. owner .. "/" .. repo .. "/" .. branch .. "/"
+local githubRawBase = "https://github.com/" .. owner .. "/" .. repo .. "/raw/" .. branch .. "/"
 
 local speaker = peripheral.find("speaker")
 if not speaker then error("Speaker not found") end
@@ -70,21 +75,34 @@ end
 
 local function playTrack(track)
   local path = fs.combine(musicDir, track.file)
-  if not fs.exists(path) then
-    draw()
-    writeAt(2, select(2, screen.getSize()), "Missing file. Run update.", colors.red)
-    sleep(2)
-    return
-  end
 
   playing = true
   stopRequested = false
   draw()
 
   local decoder = dfpwm.make_decoder()
-  local file = fs.open(path, "rb")
+  local file = nil
+  local response = nil
+
+  if fs.exists(path) then
+    file = fs.open(path, "rb")
+  else
+    local encoded = textutils.urlEncode(track.file)
+    for _, url in ipairs({ rawBase .. encoded, githubRawBase .. encoded }) do
+      response = http.get(url, nil, true)
+      if response then break end
+    end
+    if not response then
+      playing = false
+      draw()
+      writeAt(2, select(2, screen.getSize()), "Cannot stream track. Try again.", colors.red)
+      sleep(2)
+      return
+    end
+  end
+
   while not stopRequested do
-    local chunk = file.read(16 * 1024)
+    local chunk = file and file.read(16 * 1024) or response.read(16 * 1024)
     if not chunk then break end
     local buffer = decoder(chunk)
     while not speaker.playAudio(buffer) do
@@ -97,7 +115,8 @@ local function playTrack(track)
       end
     end
   end
-  file.close()
+  if file then file.close() end
+  if response then response.close() end
   speaker.stop()
   playing = false
   draw()
@@ -194,27 +213,48 @@ if type(manifest) ~= "table" or type(manifest.tracks) ~= "table" then
   error("tracks.json format is invalid")
 end
 
-local count = 0
-for _, track in ipairs(manifest.tracks) do
-  if type(track.file) == "string" then
-    local localPath = fs.combine(musicDir, track.file)
-    local url = rawBase .. textutils.urlEncode(track.file)
-    if download(url, localPath, true) then
-      count = count + 1
-      print("OK: " .. (track.title or track.file))
-    end
-  end
-end
-
-print("Updated tracks: " .. count)
+print("Track list updated: " .. #manifest.tracks)
+print("Songs will stream from GitHub when played.")
 
 ]]
 local tracksSource = [[
 {
   "tracks": [
     {
-      "title": "Созвездия",
-      "file": "sozvezdiya.dfpwm"
+      "title": "Bar Song",
+      "file": "BarSong.dfpwm"
+    },
+    {
+      "title": "Gradusy - Plavanie",
+      "file": "GradusyPlavanie.dfpwm"
+    },
+    {
+      "title": "Gradusy - Po pustakam",
+      "file": "GradusyPopystakam.dfpwm"
+    },
+    {
+      "title": "Kyrtka",
+      "file": "Kyrtka.dfpwm"
+    },
+    {
+      "title": "Macarena",
+      "file": "Macarena.dfpwm"
+    },
+    {
+      "title": "Milky",
+      "file": "Milky.dfpwm"
+    },
+    {
+      "title": "Naturaleno",
+      "file": "Naturaleno.dfpwm"
+    },
+    {
+      "title": "SMS",
+      "file": "SMS.dfpwm"
+    },
+    {
+      "title": "Sozvezdia",
+      "file": "Sozvezdia.dfpwm"
     }
   ]
 }
