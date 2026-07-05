@@ -12,7 +12,8 @@ local files = {
 local function download(url, path)
   print("Downloading " .. path)
   if fs.exists(path) then fs.delete(path) end
-  if not shell.run("wget", url, path) then
+  shell.run("wget", url, path)
+  if not fs.exists(path) then
     error("Cannot download: " .. url)
   end
 end

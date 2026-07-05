@@ -10,7 +10,8 @@ end
 
 local function download(url, path, binary)
   if fs.exists(path) then fs.delete(path) end
-  if not shell.run("wget", url, path) then
+  shell.run("wget", url, path)
+  if not fs.exists(path) then
     print("Failed: " .. url)
     return false
   end
