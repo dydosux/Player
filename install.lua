@@ -525,35 +525,40 @@ while true do
     local screenKey = event == "monitor_touch" and a or "__term"
     local x = b
     local y = c
+    local handled = false
     local newVolume = hitVolume(screenKey, x, y)
     if newVolume then
       volume = newVolume
       changeVolume(0)
       draw()
-      return
+      handled = true
     end
-    local id = hitButton(screenKey, x, y)
-    if id == "play" then
-      playSelected()
-      return
-    elseif id == "next" then
-      selectNext()
-      draw()
-      return
-    elseif id == "prev" then
-      selectPrev()
-      draw()
-      return
-    elseif id then
-      controlAction(id)
-      draw()
-      return
+    if not handled then
+      local id = hitButton(screenKey, x, y)
+      if id == "play" then
+        playSelected()
+        handled = true
+      elseif id == "next" then
+        selectNext()
+        draw()
+        handled = true
+      elseif id == "prev" then
+        selectPrev()
+        draw()
+        handled = true
+      elseif id then
+        controlAction(id)
+        draw()
+        handled = true
+      end
     end
-    local h = screenHeightsByScreen[screenKey] or select(2, screen.getSize())
-    local index = y - 3 + (listOffsetsByScreen[screenKey] or listOffset)
-    if index >= 1 and index <= #tracks and y < h - 3 then
-      selected = index
-      draw()
+    if not handled then
+      local h = screenHeightsByScreen[screenKey] or select(2, screen.getSize())
+      local index = y - 3 + (listOffsetsByScreen[screenKey] or listOffset)
+      if index >= 1 and index <= #tracks and y < h - 3 then
+        selected = index
+        draw()
+      end
     end
   elseif event == "peripheral" or event == "peripheral_detach" then
     testSpeakers()
