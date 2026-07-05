@@ -20,6 +20,7 @@ local selected = 1
 local playing = false
 local status = "Ready"
 local speakers = {}
+local speakerNames = {}
 local stopRequested = false
 local manualStopRequested = false
 local nextRequested = false
@@ -53,7 +54,17 @@ local function center(y, text, fg, bg)
 end
 
 local function refreshSpeakers()
-  speakers = { peripheral.find("speaker") }
+  speakers = {}
+  speakerNames = {}
+  for _, name in ipairs(peripheral.getNames()) do
+    if peripheral.getType(name) == "speaker" then
+      local speaker = peripheral.wrap(name)
+      if speaker then
+        speakerNames[#speakerNames + 1] = name
+        speakers[#speakers + 1] = speaker
+      end
+    end
+  end
   return #speakers
 end
 
@@ -61,6 +72,27 @@ local function stopSpeakers()
   for _, speaker in ipairs(speakers) do
     pcall(function() speaker.stop() end)
   end
+end
+
+local function testSpeakers()
+  refreshSpeakers()
+  stopSpeakers()
+  sleep(0.1)
+  local workingSpeakers = {}
+  local workingNames = {}
+  for index, speaker in ipairs(speakers) do
+    local ok = pcall(function()
+      speaker.stop()
+      return speaker.playNote("harp", 0.05, 12)
+    end)
+    if ok then
+      workingSpeakers[#workingSpeakers + 1] = speaker
+      workingNames[#workingNames + 1] = speakerNames[index]
+    end
+  end
+  speakers = workingSpeakers
+  speakerNames = workingNames
+  return #speakers
 end
 
 local function safeRead(path)
@@ -124,6 +156,21 @@ local function drawLoading(title, detail, step, total)
     center(math.max(5, math.floor(h / 2) + 3), "[" .. bar .. "]", colors.yellow)
     center(math.max(6, math.floor(h / 2) + 4), tostring(step) .. "/" .. tostring(total), colors.gray)
   end
+end
+
+local function drawSpeakerScan()
+  clear(colors.black)
+  local w, h = screen.getSize()
+  center(2, "Speaker Scan", colors.cyan)
+  center(4, "Found working speakers: " .. tostring(#speakers), colors.lime)
+  local maxLines = h - 7
+  for i = 1, math.min(#speakerNames, maxLines) do
+    local name = speakerNames[i]
+    if #name > w - 4 then name = name:sub(1, w - 7) .. "..." end
+    writeAt(2, 5 + i, tostring(i) .. ". " .. name, colors.white)
+  end
+  center(h - 1, "Press any key...", colors.gray)
+  os.pullEvent("key")
 end
 
 local function discoverTracks()
@@ -222,7 +269,7 @@ local function draw()
   local barW = math.max(8, math.min(w - 20, 28))
   local filled = math.floor(volume * barW + 0.5)
   writeAt(2, h - 2, "Volume [" .. string.rep("#", filled) .. string.rep("-", barW - filled) .. "]", colors.yellow)
-  writeAt(2, h, "Keys: Up/Down Enter S U N/P R Q  +/- volume", colors.gray)
+  writeAt(2, h, "Keys: Up/Down Enter S U N/P R Q  +/- vol  T scan", colors.gray)
 end
 
 local function selectNext()
@@ -299,7 +346,9 @@ local function playSelected()
     end
   end
 
-  refreshSpeakers()
+  status = "Scanning speakers..."
+  draw()
+  testSpeakers()
   if #speakers == 0 then
     status = "No speakers found"
     draw()
@@ -380,6 +429,7 @@ while true do
     elseif key == "p" or key == "left" then selectPrev(); draw()
     elseif key == "minus" then changeVolume(-0.1); draw()
     elseif key == "equals" or key == "numPadAdd" then changeVolume(0.1); draw()
+    elseif key == "t" then testSpeakers(); drawSpeakerScan(); draw()
     elseif key == "r" then selfUpdate()
     elseif key == "q" then stopSpeakers(); clear(); return
     end
@@ -392,7 +442,7 @@ while true do
       draw()
     end
   elseif event == "peripheral" or event == "peripheral_detach" then
-    refreshSpeakers()
+    testSpeakers()
     draw()
   end
 end
