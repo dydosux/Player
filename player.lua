@@ -21,6 +21,7 @@ local status = "Ready"
 local speakers = {}
 local buttons = {}
 local stopRequested = false
+local manualStopRequested = false
 local nextRequested = false
 local prevRequested = false
 local listOffset = 0
@@ -255,6 +256,7 @@ end
 local function controlAction(id)
   if id == "stop" then
     stopRequested = true
+    manualStopRequested = true
     stopSpeakers()
   elseif id == "next" then
     nextRequested = true
@@ -266,6 +268,7 @@ local function controlAction(id)
     stopSpeakers()
   elseif id == "update" then
     stopRequested = true
+    manualStopRequested = true
     stopSpeakers()
     updateLibrary()
     loadTracks()
@@ -319,6 +322,7 @@ local function playSelected()
 
   playing = true
   stopRequested = false
+  manualStopRequested = false
   nextRequested = false
   prevRequested = false
   status = "Playing: " .. (track.title or track.file)
@@ -361,9 +365,12 @@ local function playSelected()
   elseif prevRequested then
     selectPrev()
     playSelected()
-  else
+  elseif manualStopRequested then
     status = "Stopped"
     draw()
+  else
+    selectNext()
+    playSelected()
   end
 end
 
