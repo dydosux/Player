@@ -1,15 +1,19 @@
 {
   "tracks": [
     {
-      "title": "Bar Song",
+      "title": "BarSong",
       "file": "BarSong.dfpwm"
     },
     {
-      "title": "Gradusy - Plavanie",
+      "title": "GradusyCherdak",
+      "file": "GradusyCherdak.dfpwm"
+    },
+    {
+      "title": "GradusyPlavanie",
       "file": "GradusyPlavanie.dfpwm"
     },
     {
-      "title": "Gradusy - Po pustakam",
+      "title": "GradusyPopystakam",
       "file": "GradusyPopystakam.dfpwm"
     },
     {
