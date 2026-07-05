@@ -1,5 +1,5 @@
 local owner = "dydosux"
-local repo = "Test"
+local repo = "Player"
 local branch = "main"
 local rawBase = "https://raw.githubusercontent.com/" .. owner .. "/" .. repo .. "/" .. branch .. "/"
 local musicDir = "music"

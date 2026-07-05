@@ -1,8 +1,40 @@
 {
   "tracks": [
     {
-      "title": "Созвездия",
-      "file": "sozvezdiya.dfpwm"
+      "title": "Bar Song",
+      "file": "BarSong.dfpwm"
+    },
+    {
+      "title": "Gradusy - Plavanie",
+      "file": "GradusyPlavanie.dfpwm"
+    },
+    {
+      "title": "Gradusy - Po pustakam",
+      "file": "GradusyPopystakam.dfpwm"
+    },
+    {
+      "title": "Kyrtka",
+      "file": "Kyrtka.dfpwm"
+    },
+    {
+      "title": "Macarena",
+      "file": "Macarena.dfpwm"
+    },
+    {
+      "title": "Milky",
+      "file": "Milky.dfpwm"
+    },
+    {
+      "title": "Naturaleno",
+      "file": "Naturaleno.dfpwm"
+    },
+    {
+      "title": "SMS",
+      "file": "SMS.dfpwm"
+    },
+    {
+      "title": "Sozvezdia",
+      "file": "Sozvezdia.dfpwm"
     }
   ]
 }
