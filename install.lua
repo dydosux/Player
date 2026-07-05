@@ -210,9 +210,12 @@ local function ensureDir(path)
 end
 
 local function download(url, path, binary)
+  if fs.exists(path) then
+    print("Exists: " .. path)
+    return true
+  end
   for attempt = 1, 5 do
     for _, candidate in ipairs({ url, url:gsub(rawBase, githubRawBase) }) do
-      if fs.exists(path) then fs.delete(path) end
       shell.run("wget", candidate, path)
       if fs.exists(path) then
         sleep(0.5)
@@ -244,8 +247,20 @@ if type(manifest) ~= "table" or type(manifest.tracks) ~= "table" then
   error("tracks.json format is invalid")
 end
 
-print("Track list updated: " .. #manifest.tracks)
-print("Songs will stream from GitHub when played.")
+local count = 0
+for _, track in ipairs(manifest.tracks) do
+  if type(track.file) == "string" then
+    local localPath = fs.combine(musicDir, track.file)
+    local url = rawBase .. textutils.urlEncode(track.file)
+    if download(url, localPath, true) then
+      count = count + 1
+      print("OK: " .. (track.title or track.file))
+    end
+  end
+end
+
+print("Updated tracks: " .. count)
+print("Free space: " .. fs.getFreeSpace("/") .. " bytes")
 
 ]]
 local tracksSource = [[
