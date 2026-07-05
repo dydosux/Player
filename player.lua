@@ -11,21 +11,44 @@ local musicDir = "music"
 local tracksPath = "tracks.json"
 local tempListPath = ".repo_files.json"
 
-local screen = peripheral.find("monitor") or term.current()
-if screen.setTextScale then screen.setTextScale(0.5) end
-
 local tracks = {}
 local selected = 1
 local playing = false
 local status = "Ready"
 local speakers = {}
 local speakerNames = {}
+local screens = {}
+local screenKeys = {}
+local screen = term.current()
+local buttonsByScreen = {}
+local volumeBarsByScreen = {}
+local screenHeightsByScreen = {}
+local listOffsetsByScreen = {}
 local stopRequested = false
 local manualStopRequested = false
 local nextRequested = false
 local prevRequested = false
 local listOffset = 0
 local volume = 1.0
+
+local function refreshScreens()
+  screens = {}
+  screenKeys = {}
+  for _, name in ipairs(peripheral.getNames()) do
+    if peripheral.getType(name) == "monitor" then
+      local monitor = peripheral.wrap(name)
+      if monitor then
+        if monitor.setTextScale then monitor.setTextScale(0.5) end
+        screens[#screens + 1] = monitor
+        screenKeys[#screenKeys + 1] = name
+      end
+    end
+  end
+  if #screens == 0 then
+    screens[1] = term.current()
+    screenKeys[1] = "__term"
+  end
+end
 
 local function ensureDir(path)
   if not fs.exists(path) then fs.makeDir(path) end
@@ -50,6 +73,28 @@ end
 local function center(y, text, fg, bg)
   local w = screen.getSize()
   writeAt(math.max(1, math.floor((w - #text) / 2) + 1), y, text, fg, bg)
+end
+
+local function addButton(key, id, x, y, w, label, fg, bg)
+  buttonsByScreen[key] = buttonsByScreen[key] or {}
+  buttonsByScreen[key][#buttonsByScreen[key] + 1] = { id = id, x = x, y = y, w = w, h = 1 }
+  writeAt(x, y, string.rep(" ", w), fg, bg)
+  writeAt(x + math.max(0, math.floor((w - #label) / 2)), y, label, fg, bg)
+end
+
+local function hitButton(key, x, y)
+  for _, button in ipairs(buttonsByScreen[key] or {}) do
+    if x >= button.x and x < button.x + button.w and y >= button.y and y < button.y + button.h then
+      return button.id
+    end
+  end
+end
+
+local function hitVolume(key, x, y)
+  local bar = volumeBarsByScreen[key]
+  if bar and y == bar.y and x >= bar.x and x < bar.x + bar.w then
+    return math.max(0, math.min(1, (x - bar.x + 1) / bar.w))
+  end
 end
 
 local function refreshSpeakers()
@@ -142,33 +187,41 @@ local function downloadIfMissing(url, path)
 end
 
 local function drawLoading(title, detail, step, total)
-  local frames = { "|", "/", "-", "\\" }
-  local w, h = screen.getSize()
-  clear(colors.black)
-  center(math.max(2, math.floor(h / 2) - 3), "ServerFOX Music", colors.cyan)
-  center(math.max(3, math.floor(h / 2) - 1), title .. " " .. frames[(step % #frames) + 1], colors.lime)
-  center(math.max(4, math.floor(h / 2) + 1), detail or "", colors.white)
-  if total and total > 0 then
-    local barW = math.max(10, math.min(w - 6, 34))
-    local filled = math.floor((step / total) * barW)
-    local bar = string.rep("#", filled) .. string.rep("-", barW - filled)
-    center(math.max(5, math.floor(h / 2) + 3), "[" .. bar .. "]", colors.yellow)
-    center(math.max(6, math.floor(h / 2) + 4), tostring(step) .. "/" .. tostring(total), colors.gray)
+  refreshScreens()
+  for index, target in ipairs(screens) do
+    screen = target
+    local frames = { "|", "/", "-", "\\" }
+    local w, h = screen.getSize()
+    clear(colors.black)
+    center(math.max(2, math.floor(h / 2) - 3), "ServerFOX Music", colors.cyan)
+    center(math.max(3, math.floor(h / 2) - 1), title .. " " .. frames[(step % #frames) + 1], colors.lime)
+    center(math.max(4, math.floor(h / 2) + 1), detail or "", colors.white)
+    if total and total > 0 then
+      local barW = math.max(10, math.min(w - 6, 34))
+      local filled = math.floor((step / total) * barW)
+      local bar = string.rep("#", filled) .. string.rep("-", barW - filled)
+      center(math.max(5, math.floor(h / 2) + 3), "[" .. bar .. "]", colors.yellow)
+      center(math.max(6, math.floor(h / 2) + 4), tostring(step) .. "/" .. tostring(total), colors.gray)
+    end
   end
 end
 
 local function drawSpeakerScan()
-  clear(colors.black)
-  local w, h = screen.getSize()
-  center(2, "Speaker Scan", colors.cyan)
-  center(4, "Found working speakers: " .. tostring(#speakers), colors.lime)
-  local maxLines = h - 7
-  for i = 1, math.min(#speakerNames, maxLines) do
-    local name = speakerNames[i]
-    if #name > w - 4 then name = name:sub(1, w - 7) .. "..." end
-    writeAt(2, 5 + i, tostring(i) .. ". " .. name, colors.white)
+  refreshScreens()
+  for _, target in ipairs(screens) do
+    screen = target
+    clear(colors.black)
+    local w, h = screen.getSize()
+    center(2, "Speaker Scan", colors.cyan)
+    center(4, "Found working speakers: " .. tostring(#speakers), colors.lime)
+    local maxLines = h - 7
+    for i = 1, math.min(#speakerNames, maxLines) do
+      local name = speakerNames[i]
+      if #name > w - 4 then name = name:sub(1, w - 7) .. "..." end
+      writeAt(2, 5 + i, tostring(i) .. ". " .. name, colors.white)
+    end
+    center(h - 1, "Press any key...", colors.gray)
   end
-  center(h - 1, "Press any key...", colors.gray)
   os.pullEvent("key")
 end
 
@@ -234,41 +287,64 @@ local function selfUpdate()
 end
 
 local function draw()
+  refreshScreens()
   refreshSpeakers()
-  clear(colors.black)
-  local w, h = screen.getSize()
-  writeAt(2, 1, "ServerFOX Music", colors.cyan)
-  writeAt(w - 13, 1, "SPK " .. tostring(#speakers), colors.lime)
-  local volumeText = "VOL " .. tostring(math.floor(volume * 100 + 0.5)) .. "%"
-  writeAt(math.max(2, w - #volumeText - 1), 2, volumeText, colors.yellow)
-  writeAt(2, 2, status, colors.gray)
+  buttonsByScreen = {}
+  volumeBarsByScreen = {}
+  screenHeightsByScreen = {}
+  listOffsetsByScreen = {}
+  for screenIndex, target in ipairs(screens) do
+    screen = target
+    local key = screenKeys[screenIndex]
+    clear(colors.black)
+    local w, h = screen.getSize()
+    screenHeightsByScreen[key] = h
+    writeAt(2, 1, "ServerFOX Music", colors.cyan)
+    writeAt(math.max(2, w - 13), 1, "SPK " .. tostring(#speakers), colors.lime)
+    local volumeText = "VOL " .. tostring(math.floor(volume * 100 + 0.5)) .. "%"
+    writeAt(math.max(2, w - #volumeText - 1), 2, volumeText, colors.yellow)
+    writeAt(2, 2, status:sub(1, math.max(1, w - #volumeText - 4)), colors.gray)
 
-  local listTop = 4
-  local listBottom = h - 4
-  for line = listTop, listBottom do
-    writeAt(1, line, string.rep(" ", w), colors.white, colors.black)
-  end
-
-  local visible = math.max(1, listBottom - listTop + 1)
-  local offset = 0
-  if selected > visible then offset = selected - visible end
-  listOffset = offset
-  for i = 1, math.min(#tracks, visible) do
-    local index = i + offset
-    local track = tracks[index]
-    local title = track and (track.title or track.file) or ""
-    if #title > w - 5 then title = title:sub(1, w - 8) .. "..." end
-    if index == selected then
-      writeAt(2, listTop + i - 1, "> " .. title, colors.black, playing and colors.lime or colors.white)
-    else
-      writeAt(2, listTop + i - 1, "  " .. title, colors.white)
+    local listTop = 4
+    local listBottom = h - 6
+    for line = listTop, listBottom do
+      writeAt(1, line, string.rep(" ", w), colors.white, colors.black)
     end
-  end
 
-  local barW = math.max(8, math.min(w - 20, 28))
-  local filled = math.floor(volume * barW + 0.5)
-  writeAt(2, h - 2, "Volume [" .. string.rep("#", filled) .. string.rep("-", barW - filled) .. "]", colors.yellow)
-  writeAt(2, h, "Keys: Up/Down Enter S U N/P R Q  +/- vol  T scan", colors.gray)
+    local visible = math.max(1, listBottom - listTop + 1)
+    local offset = 0
+    if selected > visible then offset = selected - visible end
+    listOffset = offset
+    listOffsetsByScreen[key] = offset
+    for i = 1, math.min(#tracks, visible) do
+      local index = i + offset
+      local track = tracks[index]
+      local title = track and (track.title or track.file) or ""
+      if #title > w - 5 then title = title:sub(1, w - 8) .. "..." end
+      if index == selected then
+        writeAt(2, listTop + i - 1, "> " .. title, colors.black, playing and colors.lime or colors.white)
+      else
+        writeAt(2, listTop + i - 1, "  " .. title, colors.white)
+      end
+    end
+
+    local buttonY = h - 4
+    local bw = math.max(6, math.floor((w - 7) / 5))
+    addButton(key, "prev", 2, buttonY, bw, "Prev", colors.white, colors.gray)
+    addButton(key, "play", 3 + bw, buttonY, bw, "Play", colors.black, colors.lime)
+    addButton(key, "stop", 4 + bw * 2, buttonY, bw, "Stop", colors.white, colors.red)
+    addButton(key, "next", 5 + bw * 3, buttonY, bw, "Next", colors.white, colors.gray)
+    addButton(key, "update", 6 + bw * 4, buttonY, bw, "Update", colors.white, colors.blue)
+
+    local barW = math.max(8, math.min(w - 20, 28))
+    local filled = math.floor(volume * barW + 0.5)
+    local barX = 10
+    volumeBarsByScreen[key] = { x = barX + 1, y = h - 2, w = barW }
+    writeAt(2, h - 2, "Volume [", colors.yellow)
+    writeAt(barX + 1, h - 2, string.rep("#", filled) .. string.rep("-", barW - filled), colors.yellow)
+    writeAt(barX + barW + 1, h - 2, "]", colors.yellow)
+    writeAt(2, h, "Keys: Enter S U N/P R Q  +/- vol  T scan", colors.gray)
+  end
 end
 
 local function selectNext()
@@ -304,7 +380,7 @@ local function controlAction(id)
     loadTracks()
     draw()
   elseif id == "play" then
-    stopRequested = true
+    return
   end
 end
 
@@ -322,6 +398,19 @@ local function handlePlaybackEvent(event, a, b, c)
     elseif key == "minus" then changeVolume(-0.1); draw()
     elseif key == "equals" or key == "numPadAdd" then changeVolume(0.1); draw()
     end
+  elseif event == "monitor_touch" or event == "mouse_click" then
+    local screenKey = event == "monitor_touch" and a or "__term"
+    local x = b
+    local y = c
+    local newVolume = hitVolume(screenKey, x, y)
+    if newVolume then
+      volume = newVolume
+      changeVolume(0)
+      draw()
+      return
+    end
+    local id = hitButton(screenKey, x, y)
+    if id then controlAction(id) end
   end
 end
 
@@ -433,9 +522,27 @@ while true do
     elseif key == "q" then stopSpeakers(); clear(); return
     end
   elseif event == "monitor_touch" or event == "mouse_click" then
+    local screenKey = event == "monitor_touch" and a or "__term"
+    local x = b
     local y = c
-    local _, h = screen.getSize()
-    local index = y - 3 + listOffset
+    local newVolume = hitVolume(screenKey, x, y)
+    if newVolume then
+      volume = newVolume
+      changeVolume(0)
+      draw()
+      return
+    end
+    local id = hitButton(screenKey, x, y)
+    if id == "play" then
+      playSelected()
+      return
+    elseif id then
+      controlAction(id)
+      draw()
+      return
+    end
+    local h = screenHeightsByScreen[screenKey] or select(2, screen.getSize())
+    local index = y - 3 + (listOffsetsByScreen[screenKey] or listOffset)
     if index >= 1 and index <= #tracks and y < h - 3 then
       selected = index
       draw()
